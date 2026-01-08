@@ -1,28 +1,33 @@
 package org.example;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Walksat {
-    private int maxFlips;
-    private int maxRetries;
-    private float p; // probability of random walk
-    private int k;
-
-    //get all variables on a list
-    //random assignment of variable values
 
     public static Boolean walksat(List<int[]> clauses, int maxFlips, int maxRetries, float p, int k) {
 
-        return false;
+        Set<Integer> variables = getVariables(clauses);
+
+        // Print all variable IDs found
+        System.out.println("Variables found: " + variables);
+
+        // Print all clauses correctly
+        System.out.println("Clauses:");
+        for (int i = 0; i < clauses.size(); i++) {
+            System.out.println(i + ": " + Arrays.toString(clauses.get(i)));
+        }
+
+        return false; // still just test
     }
 
     private static Set<Integer> getVariables(List<int[]> clauses) {
-        Set<Integer> Variables = null;
+        Set<Integer> variables = new HashSet<>();
+
         for (int[] clause : clauses) {
-
+            for (int lit : clause) {
+                variables.add(Math.abs(lit));
+            }
         }
-
-        return Variables;
+        return variables;
     }
 }
