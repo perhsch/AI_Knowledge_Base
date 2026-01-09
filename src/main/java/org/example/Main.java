@@ -53,10 +53,26 @@ public class Main {
             int literal = Integer.parseInt(input);
             List<int[]>KB = KnowledgeBase.loadKB(path);
             KB.add(new int[]{-literal});
-            if (!Walksat.walksat(KB,10000,10,0.5f,P)) {
-                System.out.println("The literal " + literal + " is entailed by the knowledge base.");
-            } else {
+            if (false) {
                 System.out.println("The literal " + literal + " is NOT entailed by the knowledge base.");
+            } else {
+                Resolution.Result res = Resolution.run(KB);
+                if (res.contradiction) {
+                    System.out.println("The literal " + literal + " IS entailed by the knowledge base (empty clause found).");
+
+                    // Add all derived resolvents into KB
+                    KB.addAll(res.derived);
+
+                    // Rewrite file with updated C in header
+                    int newC = KB.size();
+                    KnowledgeBase.saveKB(path, P, newC, Lmin, Lmax, KB);
+
+                    System.out.println("Resolution steps appended and KB rewritten with new C = " + newC);
+                } else {
+                    System.out.println("The literal " + literal + " is NOT entailed by the knowledge base (no empty clause).");
+                }
+                KnowledgeBase.checkDuplicates(path);
+
             }
         }
     }

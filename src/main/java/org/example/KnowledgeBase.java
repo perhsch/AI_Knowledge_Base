@@ -43,6 +43,30 @@ public class KnowledgeBase {
 
         return clauses;
     }
+    public static void checkDuplicates(String filename) throws IOException {
+        List<int[]> clauses = loadKB(filename);
+
+        Map<String, Integer> count = new HashMap<>();
+
+        for (int[] clause : clauses) {
+            int[] copy = Arrays.copyOf(clause, clause.length);
+            Arrays.sort(copy);
+            String key = Arrays.toString(copy);
+            count.put(key, count.getOrDefault(key, 0) + 1);
+        }
+
+        int duplicates = 0;
+        for (Map.Entry<String, Integer> e : count.entrySet()) {
+            if (e.getValue() > 1) {
+                duplicates += (e.getValue() - 1);
+                System.out.println("DUPLICATE x" + e.getValue() + " : " + e.getKey());
+            }
+        }
+
+        System.out.println("Total clauses: " + clauses.size());
+        System.out.println("Duplicate instances: " + duplicates);
+        System.out.println("Unique clauses: " + count.size());
+    }
     public static void saveKB(String filename, int P, int C, int Lmin, int Lmax, List<int[]> clauses)
             throws IOException {
 
@@ -54,6 +78,11 @@ public class KnowledgeBase {
 
             // Each clause on one line
             for (int[] clause : clauses) {
+                if (clause.length == 0) {
+                    bw.write("0");
+                    bw.newLine();
+                    continue;
+                }
                 for (int i = 0; i < clause.length; i++) {
                     bw.write(Integer.toString(clause[i]));
                     if (i < clause.length - 1) bw.write(" ");

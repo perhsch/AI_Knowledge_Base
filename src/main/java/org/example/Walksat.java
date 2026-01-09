@@ -4,20 +4,117 @@ import java.util.*;
 
 public class Walksat {
 
-    public static Boolean walksat(List<int[]> clauses, int maxFlips, int maxRetries, float p, int k) {
+    public static boolean walksat(List<int[]> clauses, int maxFlips, int maxTries, double p, int k) {
+        Random rnd = new Random();
 
-        Set<Integer> variables = getVariables(clauses);
+        // infer variables
+        Set<Integer> vars = getVariables(clauses);
+        int P = vars.stream().max(Integer::compareTo).orElse(0);
+        System.out.println("P: " + P);
 
-        // Print all variable IDs found
-        System.out.println("Variables found: " + variables);
+        for (int tryNo = 1; tryNo <= maxTries; tryNo++) {
 
-        // Print all clauses correctly
-        System.out.println("Clauses:");
-        for (int i = 0; i < clauses.size(); i++) {
-            System.out.println(i + ": " + Arrays.toString(clauses.get(i)));
+            boolean[] A = new boolean[P + 1];
+
+            // init assignment
+            if (tryNo == 1) {
+               semiGreedyInit(A, clauses, vars, k, rnd); // we will define this next
+            } else {
+                randomInit(A, vars, rnd);
+            }
+
+            for (int flip = 1; flip <= maxFlips; flip++) {
+
+                if (isFormulaSatisfied(clauses, A)) return true;
+
+                List<int[]> unsat = getUnsatisfiedClauses(clauses, A);
+                int[] c = unsat.get(rnd.nextInt(unsat.size()));
+
+                int v = chooseVarFromClause(c, clauses, A, p, rnd);
+                A[v] = !A[v];
+            }
+        }
+        return false;
+    }
+    private static void semiGreedyInit(boolean[] A, List<int[]> clauses, Set<Integer> vars, int k, Random rnd) {
+
+        // Use a partial assignment internally
+        Boolean[] partial = new Boolean[A.length]; // all null = unassigned
+
+        Set<Integer> unassigned = new HashSet<>(vars);
+
+        class Candidate {
+            int var;
+            boolean value;
+            int score;
+            Candidate(int var, boolean value, int score) {
+                this.var = var;
+                this.value = value;
+                this.score = score;
+            }
         }
 
-        return false; // still just test
+        while (!unassigned.isEmpty()) {
+
+            List<Candidate> candidates = new ArrayList<>();
+
+            for (int v : unassigned) {
+
+                // test v = true
+                partial[v] = true;
+                int scoreTrue = scoreSatisfiedPartial(clauses, partial);
+                partial[v] = null; // restore
+
+                // test v = false
+                partial[v] = false;
+                int scoreFalse = scoreSatisfiedPartial(clauses, partial);
+                partial[v] = null; // restore
+
+                candidates.add(new Candidate(v, true, scoreTrue));
+                candidates.add(new Candidate(v, false, scoreFalse));
+            }
+
+            candidates.sort((a, b) -> Integer.compare(b.score, a.score));
+
+            int rclSize = Math.min(k, candidates.size());
+            Candidate chosen = candidates.get(rnd.nextInt(rclSize));
+
+            // commit chosen literal into partial assignment
+            partial[chosen.var] = chosen.value;
+            unassigned.remove(chosen.var);
+        }
+
+        // Convert partial assignment to full boolean[] for WalkSAT.
+        // Any still-null vars (shouldn't happen, but safe) become random.
+        for (int v : vars) {
+            if (partial[v] == null) A[v] = rnd.nextBoolean();
+            else A[v] = partial[v];
+        }
+    }
+
+    private static int scoreSatisfiedPartial(List<int[]> clauses, Boolean[] A) {
+        int count = 0;
+        for (int[] clause : clauses) {
+            if (isClauseSatisfiedPartial(clause, A)) count++;
+        }
+        return count;
+    }
+    private static boolean isClauseSatisfiedPartial(int[] clause, Boolean[] A) {
+        for (int lit : clause) {
+            int v = Math.abs(lit);
+            Boolean val = A[v];
+            if (val == null) continue; // unknown, can't satisfy yet
+
+            boolean litTrue = (lit > 0) ? val : !val;
+            if (litTrue) return true;
+        }
+        return false;
+    }
+
+    private static void randomInit(boolean[] A, Set<Integer> vars, Random rnd) {
+        for (int v : vars) {
+            A[v] = rnd.nextBoolean();
+        }
     }
 
     private static Set<Integer> getVariables(List<int[]> clauses) {
@@ -30,4 +127,84 @@ public class Walksat {
         }
         return variables;
     }
+
+    private static boolean isLiteralTrue(int lit, boolean[] A) {
+        int v = Math.abs(lit);
+        boolean val = A[v];
+        return lit > 0 ? val : !val;
+    }
+    private static boolean isClauseSatisfied(int[] clause, boolean[] A) {
+        for (int lit : clause) {
+            if (isLiteralTrue(lit, A)) return true;
+        }
+        return false;
+    }
+    private static boolean isFormulaSatisfied(List<int[]> clauses, boolean[] A) {
+        for (int[] clause : clauses) {
+            if (!isClauseSatisfied(clause, A)) return false;
+        }
+        return true;
+    }
+
+    private static List<int[]> getUnsatisfiedClauses(List<int[]> clauses, boolean[] A) {
+        List<int[]> unsat = new ArrayList<>();
+        for (int[] clause : clauses) {
+            if (!isClauseSatisfied(clause, A)) unsat.add(clause);
+        }
+        return unsat;
+    }
+    private static int scoreSatisfied(List<int[]> clauses, boolean[] A) {
+        int count = 0;
+        for (int[] clause : clauses) {
+            if (isClauseSatisfied(clause, A)) count++;
+        }
+        return count;
+    }
+    private static int chooseVarFromClause(int[] clause, List<int[]> clauses, boolean[] A, double p, Random rnd) {
+
+        int baseScore = scoreSatisfied(clauses, A);
+
+        // store candidate vars that improve score
+        List<Integer> improvingVars = new ArrayList<>();
+
+        // also track best var (for greedy case)
+        int bestVar = -1;
+        int bestScore = Integer.MIN_VALUE;
+
+        for (int lit : clause) {
+            int v = Math.abs(lit);
+
+            // flip temporarily
+            A[v] = !A[v];
+            int newScore = scoreSatisfied(clauses, A);
+            A[v] = !A[v]; // flip back
+
+            int delta = newScore - baseScore;
+
+            if (delta > 0) {
+                improvingVars.add(v);
+            }
+
+            if (newScore > bestScore) {
+                bestScore = newScore;
+                bestVar = v;
+            }
+        }
+
+        // RULE 1: if there are improving flips, choose randomly among them
+        if (!improvingVars.isEmpty()) {
+            return improvingVars.get(rnd.nextInt(improvingVars.size()));
+        }
+
+        // RULE 2: otherwise probabilistic
+        if (rnd.nextDouble() < p) {
+            // random var in clause
+            int lit = clause[rnd.nextInt(clause.length)];
+            return Math.abs(lit);
+        } else {
+            // (1-p) choose bestVar (max score / min damage)
+            return bestVar;
+        }
+    }
+
 }
