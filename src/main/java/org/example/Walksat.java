@@ -38,7 +38,6 @@ public class Walksat {
     }
     private static void semiGreedyInit(boolean[] A, List<int[]> clauses, Set<Integer> vars, int k, Random rnd) {
 
-        // Use a partial assignment internally
         Boolean[] partial = new Boolean[A.length]; // all null = unassigned
 
         Set<Integer> unassigned = new HashSet<>(vars);
@@ -59,7 +58,6 @@ public class Walksat {
             List<Candidate> candidates = new ArrayList<>();
 
             for (int v : unassigned) {
-
                 // test v = true
                 partial[v] = true;
                 int scoreTrue = scoreSatisfiedPartial(clauses, partial);
@@ -70,12 +68,14 @@ public class Walksat {
                 int scoreFalse = scoreSatisfiedPartial(clauses, partial);
                 partial[v] = null; // restore
 
+                // add both options as candidates
                 candidates.add(new Candidate(v, true, scoreTrue));
                 candidates.add(new Candidate(v, false, scoreFalse));
             }
-
+            // sort candidates by score descending
             candidates.sort((a, b) -> Integer.compare(b.score, a.score));
 
+            // keep top k candidates
             int rclSize = Math.min(k, candidates.size());
             Candidate chosen = candidates.get(rnd.nextInt(rclSize));
 
@@ -84,82 +84,12 @@ public class Walksat {
             unassigned.remove(chosen.var);
         }
 
-        // Convert partial assignment to full boolean[] for WalkSAT.
-        // Any still-null vars (shouldn't happen, but safe) become random.
+        // finalize A from partial
         for (int v : vars) {
-            if (partial[v] == null) A[v] = rnd.nextBoolean();
-            else A[v] = partial[v];
+             A[v] = partial[v];
         }
     }
 
-    private static int scoreSatisfiedPartial(List<int[]> clauses, Boolean[] A) {
-        int count = 0;
-        for (int[] clause : clauses) {
-            if (isClauseSatisfiedPartial(clause, A)) count++;
-        }
-        return count;
-    }
-    private static boolean isClauseSatisfiedPartial(int[] clause, Boolean[] A) {
-        for (int lit : clause) {
-            int v = Math.abs(lit);
-            Boolean val = A[v];
-            if (val == null) continue; // unknown, can't satisfy yet
-
-            boolean litTrue = (lit > 0) ? val : !val;
-            if (litTrue) return true;
-        }
-        return false;
-    }
-
-    private static void randomInit(boolean[] A, Set<Integer> vars, Random rnd) {
-        for (int v : vars) {
-            A[v] = rnd.nextBoolean();
-        }
-    }
-
-    private static Set<Integer> getVariables(List<int[]> clauses) {
-        Set<Integer> variables = new HashSet<>();
-
-        for (int[] clause : clauses) {
-            for (int lit : clause) {
-                variables.add(Math.abs(lit));
-            }
-        }
-        return variables;
-    }
-
-    private static boolean isLiteralTrue(int lit, boolean[] A) {
-        int v = Math.abs(lit);
-        boolean val = A[v];
-        return lit > 0 ? val : !val;
-    }
-    private static boolean isClauseSatisfied(int[] clause, boolean[] A) {
-        for (int lit : clause) {
-            if (isLiteralTrue(lit, A)) return true;
-        }
-        return false;
-    }
-    private static boolean isFormulaSatisfied(List<int[]> clauses, boolean[] A) {
-        for (int[] clause : clauses) {
-            if (!isClauseSatisfied(clause, A)) return false;
-        }
-        return true;
-    }
-
-    private static List<int[]> getUnsatisfiedClauses(List<int[]> clauses, boolean[] A) {
-        List<int[]> unsat = new ArrayList<>();
-        for (int[] clause : clauses) {
-            if (!isClauseSatisfied(clause, A)) unsat.add(clause);
-        }
-        return unsat;
-    }
-    private static int scoreSatisfied(List<int[]> clauses, boolean[] A) {
-        int count = 0;
-        for (int[] clause : clauses) {
-            if (isClauseSatisfied(clause, A)) count++;
-        }
-        return count;
-    }
     private static int chooseVarFromClause(int[] clause, List<int[]> clauses, boolean[] A, double p, Random rnd) {
 
         int baseScore = scoreSatisfied(clauses, A);
@@ -167,7 +97,6 @@ public class Walksat {
         // store candidate vars that improve score
         List<Integer> improvingVars = new ArrayList<>();
 
-        // also track best var (for greedy case)
         int bestVar = -1;
         int bestScore = Integer.MIN_VALUE;
 
@@ -196,15 +125,87 @@ public class Walksat {
             return improvingVars.get(rnd.nextInt(improvingVars.size()));
         }
 
-        // RULE 2: otherwise probabilistic
+        // RULE 2: otherwise with probability p choose random var from clause or best var
         if (rnd.nextDouble() < p) {
-            // random var in clause
             int lit = clause[rnd.nextInt(clause.length)];
             return Math.abs(lit);
         } else {
-            // (1-p) choose bestVar (max score / min damage)
             return bestVar;
         }
     }
 
+    // HELPERS
+    private static void randomInit(boolean[] A, Set<Integer> vars, Random rnd) {
+        for (int v : vars) {
+            A[v] = rnd.nextBoolean();
+        }
+    }
+
+    private static Set<Integer> getVariables(List<int[]> clauses) {
+        Set<Integer> variables = new HashSet<>();
+
+        for (int[] clause : clauses) {
+            for (int lit : clause) {
+                variables.add(Math.abs(lit));
+            }
+        }
+        return variables;
+    }
+
+    // scoring function for partial assignments
+    private static int scoreSatisfiedPartial(List<int[]> clauses, Boolean[] A) {
+        int count = 0;
+        for (int[] clause : clauses) {
+            if (isClauseSatisfiedPartial(clause, A)) count++;
+        }
+        return count;
+    }
+    // check if clause is satisfied under partial assignment
+    private static boolean isClauseSatisfiedPartial(int[] clause, Boolean[] A) {
+        for (int lit : clause) {
+            int v = Math.abs(lit);
+            Boolean val = A[v];
+            if (val == null) continue; // unknown, can't satisfy yet
+
+            boolean litTrue = (lit > 0) ? val : !val;
+            if (litTrue) return true;
+        }
+        return false;
+    }
+
+    private static boolean isLiteralTrue(int lit, boolean[] A) {
+        int v = Math.abs(lit);
+        boolean val = A[v];
+        return lit > 0 ? val : !val;
+    }
+
+    private static boolean isClauseSatisfied(int[] clause, boolean[] A) {
+        for (int lit : clause) {
+            if (isLiteralTrue(lit, A)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isFormulaSatisfied(List<int[]> clauses, boolean[] A) {
+        for (int[] clause : clauses) {
+            if (!isClauseSatisfied(clause, A)) return false;
+        }
+        return true;
+    }
+
+    private static List<int[]> getUnsatisfiedClauses(List<int[]> clauses, boolean[] A) {
+        List<int[]> unsat = new ArrayList<>();
+        for (int[] clause : clauses) {
+            if (!isClauseSatisfied(clause, A)) unsat.add(clause);
+        }
+        return unsat;
+    }
+
+    private static int scoreSatisfied(List<int[]> clauses, boolean[] A) {
+        int count = 0;
+        for (int[] clause : clauses) {
+            if (isClauseSatisfied(clause, A)) count++;
+        }
+        return count;
+    }
 }

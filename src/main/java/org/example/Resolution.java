@@ -16,7 +16,7 @@ public class Resolution {
 
     public static Result run(List<int[]> inputClauses) {
 
-        List<Set<Integer>> clauses = new ArrayList<>();
+        List<Set<Integer>> clauses = new ArrayList<>(); // kb = list and clauses = sets for easy manipulation
         for (int[] c : inputClauses) clauses.add(toSet(c));
 
         Set<String> seen = new HashSet<>();
@@ -24,9 +24,9 @@ public class Resolution {
 
         List<int[]> derived = new ArrayList<>();
 
-        boolean added = true;
+        boolean added = true; // flag to track if new clauses were added
 
-        while (added) {
+        while (added) { // loop until no new clauses are added
             added = false;
 
             int n = clauses.size();
@@ -39,7 +39,7 @@ public class Resolution {
                     for (int lit : ci) {
                         if (!cj.contains(-lit)) continue;
 
-                        Set<Integer> resolvent = resolve(ci, cj, lit);
+                        Set<Integer> resolvent = resolve(ci, cj, lit); // create a new set having all literals except lit and -lit
 
                         if (isTautology(resolvent)) continue;
 
@@ -48,11 +48,11 @@ public class Resolution {
                             return new Result(true, derived);
                         }
 
-                        String key = keyOf(resolvent);
+                        String key = keyOf(resolvent); //check duplicates
                         if (seen.contains(key)) continue;
 
-                        seen.add(key);
-                        clauses.add(resolvent);
+                        seen.add(key); // add to seen list
+                        clauses.add(resolvent); // add to KB
                         derived.add(toSortedArray(resolvent));
                         added = true;
                     }
@@ -63,6 +63,7 @@ public class Resolution {
         return new Result(false, derived);
     }
 
+    //HELPERS
     private static Set<Integer> toSet(int[] clause) {
         Set<Integer> s = new HashSet<>();
         for (int lit : clause) s.add(lit);
