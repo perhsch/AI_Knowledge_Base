@@ -41,12 +41,12 @@ public class Main {
         System.out.println("Knowledge base saved to " + filepath);
 
         // MAIN CODE - QUERY EXECUTION
-        System.out.print("Enter a literal (+-) (A-Z)");
+        System.out.print("Enter a literal (+-) (A-Z):");
         input = sc.nextLine();
         if (!input.isBlank()) {
             String queryStr = input;
             int literal = parseLiteral(queryStr); // convert string to int representation
-            List<int[]>KB = KnowledgeBase.loadKB("file2.txt"); // load existing KB from file
+            List<int[]> KB = KnowledgeBase.loadKB(filepath); // load existing KB from file this is redundant because we have it on memory but for demo purposes it's fine
             KB.add(new int[]{ -literal }); // add negative query to KB
 
             // get parameters for Walksat
@@ -72,8 +72,11 @@ public class Main {
                 if (res.contradiction) {
                     System.out.println("The literal " + queryStr + " IS entailed by the knowledge base (empty clause found).");
                     // Add all derived resolvents into KB
-                    KB.addAll(res.derived);
-                    // Rewrite file with updated C in header
+                    KB.remove(KB.size() - 1);// remove negative query used for contradiction
+                    KB.addAll(res.derived);// add all derived clauses
+                    if (!hasUnitClause(KB, literal)) { // add unit clause if not already present (sometimes resolution derives it)
+                        KB.add(new int[]{ literal });
+                    }
                     int newC = KB.size();
                     KnowledgeBase.saveKB(filepath, P, newC, Lmin, Lmax, KB);
                     System.out.println("Resolution steps appended and KB rewritten with new C = " + newC);
@@ -95,10 +98,17 @@ public class Main {
 
         c = Character.toUpperCase(c);
         if (c < 'A' || c > 'Z') {
+
             throw new IllegalArgumentException("Expected A–Z or -A–-Z");
         }
 
         int var = (c - 'A') + 1;
         return neg ? -var : var;
+    }
+    private static boolean hasUnitClause(List<int[]> clauses, int lit) {
+        for (int[] c : clauses) {
+            if (c.length == 1 && c[0] == lit) return true;
+        }
+        return false;
     }
 }

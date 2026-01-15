@@ -44,7 +44,6 @@ public class Resolution {
                         if (isTautology(resolvent)) continue;
 
                         if (resolvent.isEmpty()) {
-                            derived.add(new int[0]); // empty clause
                             return new Result(true, derived);
                         }
 
