@@ -1,16 +1,27 @@
 package org.example;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Walksat {
 
     public static boolean walksat(List<int[]> clauses, int maxFlips, int maxTries, double p, int k) {
-        Random rnd = new Random();
+        // Early check for empty clause
+        for (int[] clause : clauses) {
+            if (clause.length == 0) {
+                System.out.println("Empty clause found! Formula is unsatisfiable.");
+                return false;
+            }
+        }
+
+        Random rnd = ThreadLocalRandom.current();
 
         // infer variables
         Set<Integer> vars = getVariables(clauses);
         int P = vars.stream().max(Integer::compareTo).orElse(0);
         System.out.println("P: " + P);
+
+        if (P == 0) return true; // empty KB or no variables is vacuously satisfied
 
         for (int tryNo = 1; tryNo <= maxTries; tryNo++) {
 
@@ -18,7 +29,7 @@ public class Walksat {
 
             // init assignment
             if (tryNo == 1) {
-               semiGreedyInit(A, clauses, vars, k, rnd); // we will define this next
+               semiGreedyInit(A, clauses, vars, k, rnd);
             } else {
                 randomInit(A, vars, rnd);
             }
@@ -28,10 +39,14 @@ public class Walksat {
                 if (isFormulaSatisfied(clauses, A)) return true;
 
                 List<int[]> unsat = getUnsatisfiedClauses(clauses, A);
+                if (unsat.isEmpty()) return true; // Should be handled by isFormulaSatisfied but safe to have
+
                 int[] c = unsat.get(rnd.nextInt(unsat.size()));
 
                 int v = chooseVarFromClause(c, clauses, A, p, rnd);
-                A[v] = !A[v];
+                if (v > 0 && v <= P) {
+                    A[v] = !A[v];
+                }
             }
         }
         return false;
@@ -77,6 +92,7 @@ public class Walksat {
 
             // keep top k candidates
             int rclSize = Math.min(k, candidates.size());
+            if (rclSize <= 0) break;
             Candidate chosen = candidates.get(rnd.nextInt(rclSize));
 
             // commit chosen literal into partial assignment
@@ -86,11 +102,14 @@ public class Walksat {
 
         // finalize A from partial
         for (int v : vars) {
-             A[v] = partial[v];
+             if (v < partial.length && partial[v] != null) {
+                 A[v] = partial[v];
+             }
         }
     }
 
     private static int chooseVarFromClause(int[] clause, List<int[]> clauses, boolean[] A, double p, Random rnd) {
+        if (clause.length == 0) return -1;
 
         int baseScore = scoreSatisfied(clauses, A);
 
@@ -102,6 +121,7 @@ public class Walksat {
 
         for (int lit : clause) {
             int v = Math.abs(lit);
+            if (v >= A.length) continue;
 
             // flip temporarily
             A[v] = !A[v];
@@ -137,7 +157,9 @@ public class Walksat {
     // HELPERS
     private static void randomInit(boolean[] A, Set<Integer> vars, Random rnd) {
         for (int v : vars) {
-            A[v] = rnd.nextBoolean();
+            if (v < A.length) {
+                A[v] = rnd.nextBoolean();
+            }
         }
     }
 
@@ -164,6 +186,7 @@ public class Walksat {
     private static boolean isClauseSatisfiedPartial(int[] clause, Boolean[] A) {
         for (int lit : clause) {
             int v = Math.abs(lit);
+            if (v >= A.length) continue;
             Boolean val = A[v];
             if (val == null) continue; // unknown, can't satisfy yet
 
@@ -175,6 +198,7 @@ public class Walksat {
 
     private static boolean isLiteralTrue(int lit, boolean[] A) {
         int v = Math.abs(lit);
+        if (v >= A.length) return false;
         boolean val = A[v];
         return lit > 0 ? val : !val;
     }

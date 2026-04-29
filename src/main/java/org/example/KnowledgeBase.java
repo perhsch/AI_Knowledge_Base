@@ -5,6 +5,13 @@ import java.util.*;
 
 public class KnowledgeBase {
     public static List<int[]> generateKB(int P, int C, int Lmin, int Lmax) {
+        if (Lmin > Lmax) {
+            throw new IllegalArgumentException("Lmin (" + Lmin + ") must be <= Lmax (" + Lmax + ")");
+        }
+        if (P <= 0 || P > 26) {
+            throw new IllegalArgumentException("P must be between 1 and 26 (got " + P + ")");
+        }
+
         Random rnd = new Random();
         List<int[]> clauses = new ArrayList<>();// list of clauses for KB
         Set<String> seen = new HashSet<>(); // for duplicate clause detection
@@ -15,8 +22,9 @@ public class KnowledgeBase {
 
             Set<Integer> clauseSet = new HashSet<>(); // to build clause without duplicate variables (A and -A)
 
-            while (clauseSet.size() < len) {
-
+            int attempts = 0;
+            while (clauseSet.size() < len && attempts < 100) {
+                attempts++;
                 int var = 1 + rnd.nextInt(P);      // pick variable 1..P
                 boolean neg = rnd.nextBoolean();   // 50% chance for negative
 
@@ -28,8 +36,9 @@ public class KnowledgeBase {
                 clauseSet.add(lit); // add literal to set so no duplicates
             }
 
+            if (clauseSet.size() < len) continue; // couldn't generate a valid clause of this length
+
             // normalize clause for duplicate check:
-            // sort literals so (1 -3 5) == (5 1 -3)
             int[] clause = clauseSet.stream().mapToInt(i -> i).toArray();
             Arrays.sort(clause);
 
@@ -70,7 +79,8 @@ public class KnowledgeBase {
         List<int[]> clauses = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            br.readLine(); // skip header since we dont use it
+            String header = br.readLine();
+            if (header == null) return clauses;
 
             String line;
             while ((line = br.readLine()) != null) {
@@ -89,8 +99,13 @@ public class KnowledgeBase {
                 // parse each literal
                 for (int i = 0; i < parts.length; i++) {
                     String p = parts[i];
+                    if (p.isEmpty()) continue;
                     boolean neg = p.startsWith("-");
-                    char c = neg ? p.charAt(1) : p.charAt(0);
+                    int charIdx = neg ? 1 : 0;
+                    if (charIdx >= p.length()) {
+                        throw new IOException("Malformed literal in KB file: " + p);
+                    }
+                    char c = p.charAt(charIdx);
                     int var = charToVar(c);
                     clause[i] = neg ? -var : var;
                 }
@@ -101,13 +116,20 @@ public class KnowledgeBase {
     }
 
     // HELPERS
-    private static String litToLetter(int lit) {
+    public static String litToLetter(int lit) {
         int v = Math.abs(lit);
+        if (v < 1 || v > 26) {
+             return (lit < 0 ? "-" : "") + "VAR" + v;
+        }
         char c = (char) ('A' + v - 1);
         return (lit < 0 ? "-" : "") + c;
     }
 
-    static int charToVar(char c) {
-        return c - 'A' + 1;
+    public static int charToVar(char c) {
+        char upper = Character.toUpperCase(c);
+        if (upper < 'A' || upper > 'Z') {
+            throw new IllegalArgumentException("Variable must be A-Z, got: " + c);
+        }
+        return upper - 'A' + 1;
     }
 }
